@@ -24,6 +24,10 @@ size_t read_features(io_buf& buf, char*& line, size_t& num_chars)
   size_t num_chars_initial = buf.readto(line, '\n');
   if (num_chars_initial < 1) { return num_chars_initial; }
   num_chars = num_chars_initial;
+  // ‘\xef\xbb\xbf’ is a Unicode BOM(Byte Order Mark) and
+  // consists of invisible characters added by certain programs.
+  // The BOM often functions as a magic number used to pass along information
+  // to the program reading the file, such as the Unicode character encoding or endianess.
   if (line[0] == '\xef' && num_chars >= 3 && line[1] == '\xbb' && line[2] == '\xbf')
   {
     line += 3;
@@ -77,8 +81,19 @@ public:
   uint64_t _parse_mask;
   std::array<std::vector<std::shared_ptr<feature_dict>>, NUM_NAMESPACES>* _namespace_dictionaries;
   VW::io::logger* logger;
-
-  ~TC_parser() {}
+  std::map<VW::string_view, std::set<VW::string_view>> namespace_stats;
+  std::map<VW::string_view, int> namespace_stats_agg;
+  ~TC_parser()
+  {
+    std::cout << "Example: ";
+    for (auto it = namespace_stats.begin(); it != namespace_stats.end(); ++it)
+    {
+      VW::string_view space_name = it->first;
+      int space_cnt = it->second.size();
+      std::cout << space_name << ": " << space_cnt << ", ";
+    }
+    std::cout << "\n";
+  }
 
   // TODO: Currently this function is called by both warning and error conditions. We only log
   //      to warning here though.
@@ -162,7 +177,9 @@ public:
     size_t name_start = _read_idx;
     while (!(_read_idx >= _line.size() || _line[_read_idx] == ' ' || _line[_read_idx] == ':' ||
         _line[_read_idx] == '\t' || _line[_read_idx] == '|' || _line[_read_idx] == '\r'))
-    { ++_read_idx; }
+    {
+      ++_read_idx;
+    }
 
     return _line.substr(name_start, _read_idx - name_start);
   }
@@ -219,9 +236,10 @@ public:
       }
       features& fs = _ae->feature_space[_index];
       fs.push_back(_v, word_hash);
-
       if (audit)
       {
+        // std::cout<< "Bhaisu\n" << "_base: "<<_base << " feature_name: " << feature_name<<"\n";
+        namespace_stats[_base].insert(feature_name);
         if (!string_feature_value.empty())
         {
           std::stringstream ss;
