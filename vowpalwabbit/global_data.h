@@ -152,6 +152,7 @@ public:
   bool default_bits;
 
   uint32_t hash_seed;
+  std::map<std::string, int> namespace_counts;
 
 #ifdef PRIVACY_ACTIVATION
   bool privacy_activation = false;

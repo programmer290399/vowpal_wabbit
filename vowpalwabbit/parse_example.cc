@@ -47,6 +47,17 @@ int read_features_string(VW::workspace* all, io_buf& buf, VW::v_array<VW::exampl
   if (num_bytes_consumed < 1)
   {
     // This branch will get hit once we have reached EOF of the input device.
+
+    std::cout << "---\nTotal counts: ";
+    std::map<std::string, int> namespace_stats_agg = all->namespace_counts;
+    for (auto it = namespace_stats_agg.begin(); it != namespace_stats_agg.end(); ++it)
+    {
+      std::string space_name = it->first;
+      int space_cnt = it->second;
+      std::cout << space_name << ": " << space_cnt << ", ";
+    }
+    std::cout << "\n";
+    all->namespace_counts.clear();
     return static_cast<int>(num_bytes_consumed);
   }
 
@@ -82,7 +93,8 @@ public:
   std::array<std::vector<std::shared_ptr<feature_dict>>, NUM_NAMESPACES>* _namespace_dictionaries;
   VW::io::logger* logger;
   std::map<VW::string_view, std::set<VW::string_view>> namespace_stats;
-  std::map<VW::string_view, int> namespace_stats_agg;
+  std::map<std::string, int> namespace_stats_agg;
+  VW::workspace* _all;
   ~TC_parser()
   {
     std::cout << "Example: ";
@@ -93,6 +105,7 @@ public:
       std::cout << space_name << ": " << space_cnt << ", ";
     }
     std::cout << "\n";
+    _all->namespace_counts = namespace_stats_agg;
   }
 
   // TODO: Currently this function is called by both warning and error conditions. We only log
@@ -238,7 +251,6 @@ public:
       fs.push_back(_v, word_hash);
       if (audit)
       {
-        // std::cout<< "Bhaisu\n" << "_base: "<<_base << " feature_name: " << feature_name<<"\n";
         namespace_stats[_base].insert(feature_name);
         if (!string_feature_value.empty())
         {
@@ -424,7 +436,11 @@ public:
       }
       if (_ae->feature_space[_index].size() == 0) { _new_index = true; }
       VW::string_view name = read_name();
-      if (audit) { _base = name; }
+      namespace_stats_agg[std::string{name}]++;
+      if (audit)
+      {
+        _base = name;
+      }
       _channel_hash = _p->hasher(name.data(), name.length(), this->_hash_seed);
       nameSpaceInfoValue();
     }
@@ -521,6 +537,8 @@ public:
       this->_hash_seed = all.hash_seed;
       this->_parse_mask = all.parse_mask;
       this->logger = &all.logger;
+      this->namespace_stats_agg = all.namespace_counts;
+      this->_all = &all;
       listNameSpace();
     }
     else
